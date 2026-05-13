@@ -15,9 +15,19 @@ if (!firebase.apps.length) firebase.initializeApp(cfg);
 const db = firebase.firestore(), au = firebase.auth(), st = firebase.storage();
 
 // AI Sync Engine
-window.AI_SYNC = (sid, data) => {
+window.AI_SYNC = (sid, data, user, prof) => {
   if (!sid || !data) return;
-  db.collection('trips').doc(sid).update(data).then(() => {
+  const docRef = db.collection('trips').doc(sid);
+  
+  // 데이터에 멤버 정보가 없으면 현재 사용자 추가
+  const updateData = { ...data };
+  if (user) {
+    updateData.members = firebase.firestore.FieldValue.arrayUnion(user.uid);
+    updateData[`memberNames.${user.uid}`] = prof?.nickname || '여행자';
+    if (!updateData.owner) updateData.owner = user.uid;
+  }
+
+  docRef.set(updateData, { merge: true }).then(() => {
     location.reload();
   });
 };
@@ -271,8 +281,8 @@ const TripsView = ({ trips, user, open, setSid, setView, setSubTab, show }) => {
           if (data.itinerary && !data.name) data.name = 'AI 생성 여행';
 
           if (sid) {
-            window.AI_SYNC(sid, data);
-            show('기존 여행 업데이트 성공!');
+            window.AI_SYNC(sid, data, user, prof);
+            show('여행 데이터 동기화 시도 중...');
           } else if (data.itinerary) {
             // SID가 없으면 새 여행 생성
             const code = Math.random().toString(36).substring(2, 8).toUpperCase();
