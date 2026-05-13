@@ -246,10 +246,44 @@ const BottomBar = ({ cur, set }) => h('div', { className: 'bottom-bar' }, [{ id:
 
 const M = ({ mod, toast, close, form, setForm, db, user, prof, show, trip, sync }) => {
   if (toast) return h('div', { className: 'toast' + (toast.ok ? '' : ' toast-err') }, toast.m);
-  if (mod.add) return h('div', { className: 'modal-bg', onClick: () => close('add') }, [h('div', { className: 'modal-sheet', onClick: e => e.stopPropagation() }, [h('h2', { className: 'modal-title' }, '새 여행'), h('input', { className: 'ios-input', value: form.name, onChange: e => setForm({ ...form, name: e.target.value }), placeholder: '제목' }), h('input', { className: 'ios-input', type: 'date', value: form.start, onChange: e => setForm({ ...form, start: e.target.value }), style: { marginTop: 10 } }), h('button', { className: 'btn btn-blue btn-full btn-pill', style: { marginTop: 20 }, onClick: () => { const c = Math.random().toString(36).substring(2, 8).toUpperCase(); db.collection('trips').doc(c).set({ name: form.name, startDate: form.start, owner: user.uid, members: [user.uid], memberNames: { [user.uid]: prof.nickname }, itinerary: [], expenses: [], checklist: [], memo: '', createdAt: Date.now() }); close('add'); show('생성 완료!'); } }, '여행 등록하기')])]);
-  if (mod.profile) return h('div', { className: 'modal-bg', onClick: () => close('profile') }, [h('div', { className: 'modal-sheet' }, [h('h2', { className: 'modal-title' }, '닉네임 변경'), h('input', { id: 'nn', className: 'ios-input', defaultValue: prof.nickname }), h('button', { className: 'btn btn-blue btn-full btn-pill', style: { marginTop: 20 }, onClick: () => { const n = document.getElementById('nn').value; if(n) { db.collection('users').doc(user.uid).set({ nickname: n }); close('profile'); show('변경되었습니다!'); } } }, '변경 완료')])]);
-  if (mod.editTrip) return h('div', { className: 'modal-bg', onClick: () => close('editTrip') }, [h('div', { className: 'modal-sheet' }, [h('h2', { className: 'modal-title' }, '여행 정보 수정'), h('label', { style: { fontSize: 12, color: 'var(--sub)' } }, '여행 제목'), h('input', { className: 'ios-input', defaultValue: trip.name, id: 'et-n' }), h('div', { style: { display: 'flex', gap: 10, marginTop: 10 } }, [h('div', { style: { flex: 1 } }, [h('label', { style: { fontSize: 12 } }, '시작'), h('input', { className: 'ios-input', type: 'date', defaultValue: trip.startDate, id: 'et-s' })]), h('div', { style: { flex: 1 } }, [h('label', { style: { fontSize: 12 } }, '종료'), h('input', { className: 'ios-input', type: 'date', defaultValue: trip.endDate, id: 'et-e' })])]), h('button', { className: 'btn btn-blue btn-full btn-pill', style: { marginTop: 20 }, onClick: () => { const n = document.getElementById('et-n').value, s = document.getElementById('et-s').value, e = document.getElementById('et-e').value; sync('name', n); sync('startDate', s); sync('endDate', e); close('editTrip'); show('수정 완료!'); } }, '수정 내용 저장')])]);
-  if (mod.expense) return h('div', { className: 'modal-bg', onClick: () => close('expense') }, [h('div', { className: 'modal-sheet' }, [h('h2', { className: 'modal-title' }, '지출 추가'), h('input', { className: 'ios-input', placeholder: '항목 (예: 저녁 식사)', id: 'ex-n' }), h('div', { style: { display: 'flex', gap: 10, marginTop: 10 } }, [h('input', { className: 'ios-input', type: 'number', placeholder: '금액', id: 'ex-a', style: { flex: 1 } }), h('select', { className: 'ios-input', id: 'ex-c', style: { width: 100 } }, Object.keys(ci).map(k => h('option', { key: k }, k)))]), h('button', { className: 'btn btn-blue btn-full btn-pill', style: { marginTop: 20 }, onClick: () => { const n = document.getElementById('ex-n').value, a = document.getElementById('ex-a').value, c = document.getElementById('ex-c').value; if(!n || !a) return show('내용과 금액을 입력하세요', false); sync('expenses', [...(trip.expenses || []), { title: n, amount: Number(a), category: c, payer: prof.nickname, payerId: user.uid, date: new Date().toLocaleDateString() }]); close('expense'); show('추가 완료!'); } }, '지출 등록')])]);
+  if (mod.add) return h('div', { className: 'modal-bg', onClick: () => close('add') }, [
+    h('div', { className: 'modal-sheet', onClick: e => e.stopPropagation() }, [
+      h('h2', { className: 'modal-title' }, '새 여행'),
+      h('input', { className: 'ios-input', value: form.name, onChange: e => setForm({ ...form, name: e.target.value }), placeholder: '제목' }),
+      h('input', { className: 'ios-input', type: 'date', value: form.start, onChange: e => setForm({ ...form, start: e.target.value }), style: { marginTop: 10 } }),
+      h('button', { className: 'btn btn-blue btn-full btn-pill', style: { marginTop: 20 }, onClick: () => { const c = Math.random().toString(36).substring(2, 8).toUpperCase(); db.collection('trips').doc(c).set({ name: form.name, startDate: form.start, owner: user.uid, members: [user.uid], memberNames: { [user.uid]: prof.nickname }, itinerary: [], expenses: [], checklist: [], memo: '', createdAt: Date.now() }); close('add'); show('생성 완료!'); } }, '여행 등록하기')
+    ])
+  ]);
+  if (mod.profile) return h('div', { className: 'modal-bg', onClick: () => close('profile') }, [
+    h('div', { className: 'modal-sheet', onClick: e => e.stopPropagation() }, [
+      h('h2', { className: 'modal-title' }, '닉네임 변경'),
+      h('input', { id: 'nn', className: 'ios-input', defaultValue: prof.nickname }),
+      h('button', { className: 'btn btn-blue btn-full btn-pill', style: { marginTop: 20 }, onClick: () => { const n = document.getElementById('nn').value; if(n) { db.collection('users').doc(user.uid).set({ nickname: n }); close('profile'); show('변경되었습니다!'); } } }, '변경 완료')
+    ])
+  ]);
+  if (mod.editTrip) return h('div', { className: 'modal-bg', onClick: () => close('editTrip') }, [
+    h('div', { className: 'modal-sheet', onClick: e => e.stopPropagation() }, [
+      h('h2', { className: 'modal-title' }, '여행 정보 수정'),
+      h('label', { style: { fontSize: 12, color: 'var(--sub)' } }, '여행 제목'),
+      h('input', { className: 'ios-input', defaultValue: trip.name, id: 'et-n' }),
+      h('div', { style: { display: 'flex', gap: 10, marginTop: 10 } }, [
+        h('div', { style: { flex: 1 } }, [h('label', { style: { fontSize: 12 } }, '시작'), h('input', { className: 'ios-input', type: 'date', defaultValue: trip.startDate, id: 'et-s' })]),
+        h('div', { style: { flex: 1 } }, [h('label', { style: { fontSize: 12 } }, '종료'), h('input', { className: 'ios-input', type: 'date', defaultValue: trip.endDate, id: 'et-e' })])
+      ]),
+      h('button', { className: 'btn btn-blue btn-full btn-pill', style: { marginTop: 20 }, onClick: () => { const n = document.getElementById('et-n').value, s = document.getElementById('et-s').value, e = document.getElementById('et-e').value; sync('name', n); sync('startDate', s); sync('endDate', e); close('editTrip'); show('수정 완료!'); } }, '수정 내용 저장')
+    ])
+  ]);
+  if (mod.expense) return h('div', { className: 'modal-bg', onClick: () => close('expense') }, [
+    h('div', { className: 'modal-sheet', onClick: e => e.stopPropagation() }, [
+      h('h2', { className: 'modal-title' }, '지출 추가'),
+      h('input', { className: 'ios-input', placeholder: '항목 (예: 저녁 식사)', id: 'ex-n' }),
+      h('div', { style: { display: 'flex', gap: 10, marginTop: 10 } }, [
+        h('input', { className: 'ios-input', type: 'number', placeholder: '금액', id: 'ex-a', style: { flex: 1 } }),
+        h('select', { className: 'ios-input', id: 'ex-c', style: { width: 100 } }, Object.keys(ci).map(k => h('option', { key: k }, k)))
+      ]),
+      h('button', { className: 'btn btn-blue btn-full btn-pill', style: { marginTop: 20 }, onClick: () => { const n = document.getElementById('ex-n').value, a = document.getElementById('ex-a').value, c = document.getElementById('ex-c').value; if(!n || !a) return show('내용과 금액을 입력하세요', false); sync('expenses', [...(trip.expenses || []), { title: n, amount: Number(a), category: c, payer: prof.nickname, payerId: user.uid, date: new Date().toLocaleDateString() }]); close('expense'); show('추가 완료!'); } }, '지출 등록')
+    ])
+  ]);
   return null;
 };
 
