@@ -264,13 +264,21 @@ const TripsView = ({ trips, user, open, setSid, setView, setSubTab, show }) => {
         try { const { sid, data } = JSON.parse(e.target.value); if(sid && data) { window.AI_SYNC(sid, data); show('성공!') } } catch(err) {}
       }
     }),
-    h('div', { style: { display: 'flex', flexDirection: 'column', gap: 14 } }, trips.map(t => h('div', { key: t.id, className: 'trip-card', onClick: () => { setSid(t.id); setView('detail'); setSubTab('route') } }, [
-      h('div', { className: 'trip-cover', style: { background: covers[trips.indexOf(t) % covers.length] } }, [h('span', { className: 'trip-cover-emoji' }, t.emoji)]),
-      h('div', { className: 'trip-body', style: { position: 'relative' } }, [
-        h('h3', null, t.name), h('div', { className: 'trip-dest' }, '📍 ' + (t.destination || '미정')),
-        h('button', { className: 'icon-btn', style: { position: 'absolute', top: 0, right: 0, color: 'var(--red)' }, onClick: (e) => { e.stopPropagation(); if(confirm('삭제?')) db.collection('trips').doc(t.id).delete() } }, h(I, { n: 'delete', s: 18 }))
-      ])
-    ])))
+    h('div', { style: { display: 'flex', flexDirection: 'column', gap: 14 } }, [
+      ...trips.map(t => h('div', { key: t.id, className: 'trip-card', onClick: () => { setSid(t.id); setView('detail'); setSubTab('route') } }, [
+        h('div', { className: 'trip-cover', style: { background: covers[trips.indexOf(t) % covers.length] } }, [h('span', { className: 'trip-cover-emoji' }, t.emoji)]),
+        h('div', { className: 'trip-body', style: { position: 'relative' } }, [
+          h('h3', null, t.name), h('div', { className: 'trip-dest' }, '📍 ' + (t.destination || '미정')),
+          h('button', { className: 'icon-btn', style: { position: 'absolute', top: 0, right: 0, color: 'var(--red)' }, onClick: (e) => { e.stopPropagation(); if(confirm('삭제?')) db.collection('trips').doc(t.id).delete() } }, h(I, { n: 'delete', s: 18 }))
+        ])
+      ])),
+      trips.length === 0 && h('div', { className: 'ios-card', style: { padding: 40, textAlign: 'center', background: 'rgba(120,120,128,.04)' } }, [
+        h('div', { style: { fontSize: 48, marginBottom: 12 } }, '✈️'),
+        h('h4', { style: { margin: 0, fontWeight: 800 } }, '여행을 시작해보세요'),
+        h('p', { className: 'home-sub' }, '새로운 일정을 추가하거나 초대 코드로 참여하세요.')
+      ]),
+      h('button', { className: 'btn btn-blue btn-full btn-pill', style: { marginTop: 10 }, onClick: () => open('add') }, [h(I, { n: 'add', s: 16 }), '새 여행 만들기'])
+    ])
   ]);
 };
 
