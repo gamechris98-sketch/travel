@@ -1,8 +1,7 @@
 {
   "name": "Premium Travel Manager",
-  "short_name": "Traveler",
-  "description": "Premium Travel Planning & Management",
-  "start_url": "./travel_manager.html",
+  "short_name": "TravelPlanner",
+  "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#007aff",
@@ -10,8 +9,7 @@
     {
       "src": "https://cdn-icons-png.flaticon.com/512/826/826070.png",
       "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any maskable"
+      "type": "image/png"
     }
   ]
 }
