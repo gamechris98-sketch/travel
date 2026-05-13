@@ -14,6 +14,14 @@ const cfg = {
 if (!firebase.apps.length) firebase.initializeApp(cfg);
 const db = firebase.firestore(), au = firebase.auth(), st = firebase.storage();
 
+// AI Sync Engine
+window.AI_SYNC = (sid, data) => {
+  if (!sid || !data) return;
+  db.collection('trips').doc(sid).update(data).then(() => {
+    location.reload();
+  });
+};
+
 // UI Components
 const I = ({ n, s = 20 }) => h('span', { className: 'mi', style: { fontSize: s } }, n);
 const ci = { '식비': '🍽️', '교통': '🚕', '숙박': '🏨', '쇼핑': '🛍️', '기타': '📦' };
@@ -64,18 +72,23 @@ const BottomBar = ({ cur, set, items }) => h('div', { className: 'tab-bar' }, it
 const InfoBar = ({ dest }) => {
   const [w, setW] = useState(null);
   const [e, setE] = useState(null);
+  const [t, setT] = useState(new Date());
+  
   useEffect(() => {
     if (!dest) return;
     fetch(`https://wttr.in/${dest}?format=j1`).then(r => r.json()).then(d => setW(d.current_condition[0])).catch(() => {});
     fetch(`https://open.er-api.com/v6/latest/KRW`).then(r => r.json()).then(d => setE(d)).catch(() => {});
+    const timer = setInterval(() => setT(new Date()), 1000);
+    return () => clearInterval(timer);
   }, [dest]);
+  
   if (!dest) return null;
-  return h('div', { className: 'ios-card', style: { margin: '12px 20px', padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(0,122,255,.05)' } }, [
+  return h('div', { className: 'ios-card glass', style: { margin: '12px 20px', padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' } }, [
     h('div', { style: { display: 'flex', alignItems: 'center', gap: 10 } }, [
       h('span', { style: { fontSize: 20 } }, w ? (w.weatherDesc[0].value.includes('Sun') ? '☀️' : w.weatherDesc[0].value.includes('Cloud') ? '☁️' : '🌦️') : '🌡️'),
       h('div', null, [
-        h('p', { style: { fontSize: 11, fontWeight: 700, color: 'var(--blue)' } }, '현지 날씨'),
-        h('p', { style: { fontSize: 13, fontWeight: 800 } }, w ? `${w.temp_C}°C (${w.weatherDesc[0].value})` : '불러오는 중...')
+        h('p', { style: { fontSize: 11, fontWeight: 700, color: 'var(--blue)' } }, '현지 날씨 & 시간'),
+        h('p', { style: { fontSize: 13, fontWeight: 800 } }, w ? `${w.temp_C}°C / ${t.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}` : '불러오는 중...')
       ])
     ]),
     e && h('div', { style: { textAlign: 'right' } }, [
@@ -104,7 +117,9 @@ const MapView = ({ trip }) => {
     
     // Draw Polyline
     if (pts.length > 1) {
-      L.polyline(pts, { color: 'var(--blue)', weight: 3, opacity: 0.6, dashArray: '8, 8' }).addTo(m);
+      L.polyline(pts, { color: 'var(--blue)', weight: 4, opacity: 0.6, dashArray: '10, 10', lineJoin: 'round', lineCap: 'round' }).addTo(m);
+      // Add subtle glow to line
+      L.polyline(pts, { color: 'var(--blue)', weight: 10, opacity: 0.1 }).addTo(m);
     }
 
     sortedItin.forEach((it, idx) => {
@@ -134,105 +149,71 @@ const MapView = ({ trip }) => {
 const TRoute = ({ trip, sync, show }) => {
   const itin = trip?.itinerary || [];
   const days = [...new Set(itin.map(x => x.day || 1))].sort((a, b) => a - b);
-  const addDay = () => { const nd = (days.length ? Math.max(...days) : 0) + 1; sync('itinerary', [...itin, { day: nd, time: '09:00', title: '', desc: '', cat: '관광' }]) };
-  const addStop = (d) => sync('itinerary', [...itin, { day: d, time: '09:00', title: '', desc: '', cat: '관광' }]);
-  const cats = ['관광', '식당', '숙소', '쇼핑', '교통'];
-  const catClr = { 관광: 'var(--blue)', 식당: 'var(--orange)', 숙소: 'var(--green)', 쇼핑: 'var(--purple)', 교통: 'var(--teal)' };
-  const catIco = { 관광: '🏛️', 식당: '🍽️', 숙소: '🏨', 쇼핑: '🛍️', 교통: '🚕' };
+  const addDay = () => { const nd = (days.length ? Math.max(...days) : 0) + 1; sync('itinerary', [...itin, { day: nd, time: '09:00', title: '', desc: '', cat: '관광', emoji: '🏛️' }]) };
+  const addStop = (d) => sync('itinerary', [...itin, { day: d, time: '09:00', title: '', desc: '', cat: '관광', emoji: '🏛️' }]);
+  const cats = ['관광', '식당', '숙소', '쇼핑', '교통', '기타'];
+  const catClr = { 관광: 'var(--blue)', 식당: 'var(--orange)', 숙소: 'var(--green)', 쇼핑: 'var(--purple)', 교통: 'var(--teal)', 기타: 'var(--sub)' };
+  const catIco = { 관광: '🏛️', 식당: '🍽️', 숙소: '🏨', 쇼핑: '🛍️', 교통: '🚕', 기타: '📦' };
 
   const renderStop = (it, si, arr) => h('div', { key: it.idx, className: 'stop-item' }, [
     si < arr.length - 1 && h('div', { className: 'stop-line' }),
-    h('div', { className: 'stop-icon', style: { color: catClr[it.cat] || 'var(--blue)', background: (catClr[it.cat] || 'var(--blue)') + '12' } }, catIco[it.cat] || '📍'),
+    h('div', { className: 'stop-icon', style: { color: catClr[it.cat] || 'var(--blue)', background: (catClr[it.cat] || 'var(--blue)') + '12' } }, [
+      h(EI, { val: it.emoji || catIco[it.cat] || '📍', onSave: v => { const n = [...itin]; n[it.idx].emoji = v; sync('itinerary', n) }, style: { border: 'none', background: 'none', fontSize: 18, width: 24, textAlign: 'center', outline: 'none' } })
+    ]),
     h('div', { className: 'stop-body' }, [
       h('div', { style: { display: 'flex', alignItems: 'center', gap: 6 } }, [
         h(EI, { val: it.time, onSave: v => { const n = [...itin]; n[it.idx].time = v; sync('itinerary', n) }, style: { width: 50, border: 'none', background: 'rgba(0,122,255,.06)', borderRadius: 6, padding: '4px 6px', fontSize: 11, fontWeight: 700, color: 'var(--blue)', textAlign: 'center', outline: 'none', fontFamily: 'inherit' } }),
-        h(EI, { val: it.title, onSave: v => { const n = [...itin]; n[it.idx].title = v; sync('itinerary', n) }, style: { flex: 1, border: 'none', background: 'none', fontSize: 15, fontWeight: 700, outline: 'none', fontFamily: 'inherit', color: 'var(--text)', padding: '4px 0' }, placeholder: '장소명' })
+        h(EI, { val: it.title, onSave: v => { const n = [...itin]; n[it.idx].title = v; sync('itinerary', n) }, style: { flex: 1, border: 'none', background: 'none', fontSize: 16, fontWeight: 800, outline: 'none', fontFamily: 'inherit', color: 'var(--text)', padding: '4px 0' }, placeholder: '장소명' })
       ]),
-      h(EI, { val: it.desc, onSave: v => { const n = [...itin]; n[it.idx].desc = v; sync('itinerary', n) }, style: { border: 'none', background: 'none', fontSize: 12, color: 'var(--sub)', outline: 'none', fontFamily: 'inherit', width: '100%', padding: '2px 0' }, placeholder: '활동 내용' }),
-      h('div', { style: { display: 'flex', gap: 4, marginTop: 4 } }, cats.map(c => h('button', {
-        key: c,
-        style: { padding: '2px 8px', borderRadius: 6, border: 'none', fontSize: 10, fontWeight: 700, background: it.cat === c ? catClr[c] : 'rgba(120,120,128,.08)', color: it.cat === c ? '#fff' : 'var(--sub)', cursor: 'pointer', fontFamily: 'inherit' },
-        onClick: () => { const n = [...itin]; n[it.idx].cat = c; sync('itinerary', n) }
-      }, c))),
-      h('div', { className: 'stop-actions' }, [
-        h('button', { className: 'icon-btn', style: { width: 26, height: 26, background: it.lat ? 'var(--blue)' : 'rgba(120,120,128,.12)', color: it.lat ? '#fff' : 'var(--sub)' }, onClick: () => {
-          if (!it.title) return;
-          fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${it.title}`).then(r => r.json()).then(d => {
-            if (d[0]) {
-              const n = [...itin]; n[it.idx].lat = d[0].lat; n[it.idx].lng = d[0].lon; sync('itinerary', n); show('위치 찾기 성공!');
-            } else show('위치를 찾을 수 없음', false);
-          });
-        } }, h(I, { n: 'explore', s: 13 })),
-        h('button', { className: 'icon-btn', style: { width: 26, height: 26 }, onClick: () => it.title && window.open('https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(it.title)) }, h(I, { n: 'place', s: 13 })),
-        h('button', { className: 'icon-btn', style: { width: 26, height: 26 }, onClick: () => sync('itinerary', itin.filter((_, j) => j !== it.idx)) }, h(I, { n: 'close', s: 13 }))
+      h(EI, { val: it.desc, onSave: v => { const n = [...itin]; n[it.idx].desc = v; sync('itinerary', n) }, style: { border: 'none', background: 'none', fontSize: 13, color: 'var(--sub)', outline: 'none', fontFamily: 'inherit', width: '100%', padding: '2px 0' }, placeholder: '활동 내용' }),
+  const [itin, setItin] = useState(trip.itinerary || []);
+  useEffect(() => { setItin(trip.itinerary || []) }, [trip.itinerary]);
+
+  const addStop = () => {
+    const lastDay = itin.length ? Math.max(...itin.map(x => x.day)) : 1;
+    const n = [...itin, { idx: itin.length, day: lastDay, time: '12:00', title: '', desc: '', cat: '관광', emoji: '📍' }];
+    sync('itinerary', n);
+  };
+
+  const renderStop = (it, si) => h('div', { key: it.idx, id: `stop-${it.idx}`, className: 'stop-card glass' }, [
+    h('div', { style: { display: 'flex', gap: 12, alignItems: 'flex-start' } }, [
+      h('div', { style: { textAlign: 'center', minWidth: 50 } }, [
+        h(EI, { val: it.time, onSave: v => { const n = [...itin]; n[it.idx].time = v; sync('itinerary', n.sort((a,b)=>a.day-b.day || a.time.localeCompare(b.time))) }, style: { fontSize: 15, fontWeight: 900, textAlign: 'center', background: 'var(--card2)', borderRadius: 6, padding: '4px 0' } }),
+        h('div', { style: { marginTop: 6 } }, h('span', { style: { fontSize: 24, cursor: 'pointer' }, onClick: () => {
+          const e = prompt('이모지 입력', it.emoji || '📍'); if(e) { const n = [...itin]; n[it.idx].emoji = e; sync('itinerary', n) }
+        } }, it.emoji || '📍'))
       ]),
-      h('div', { className: 'comment-section' }, [
-        (it.comments || []).map((c, ci) => h('div', { key: ci, className: 'comment-row' }, [
-          h('span', { className: 'comment-user' }, c.user),
-          h('span', { className: 'comment-text' }, c.text)
-        ])),
-        h('div', { className: 'comment-input-row' }, [
-          h('input', { 
-            id: `cm-${it.idx}`, className: 'comment-input', placeholder: '댓글 추가...',
-            onKeyDown: e => {
-              if (e.key === 'Enter' && e.target.value) {
-                const n = [...itin];
-                if (!n[it.idx].comments) n[it.idx].comments = [];
-                n[it.idx].comments.push({ user: prof.nickname, text: e.target.value, time: Date.now() });
-                sync('itinerary', n); e.target.value = '';
-              }
-            }
-          })
-        ])
+      h('div', { style: { flex: 1 } }, [
+        h('div', { style: { display: 'flex', justifyContent: 'space-between' } }, [
+          h(EI, { val: it.title, onSave: v => { const n = [...itin]; n[it.idx].title = v; sync('itinerary', n) }, placeholder: '장소 또는 활동명', style: { fontSize: 17, fontWeight: 800, width: '100%', marginBottom: 4 } }),
+          h('div', { style: { display: 'flex', gap: 4 } }, [
+            h('button', { className: 'icon-btn', onClick: () => {
+              if (!it.title) return;
+              fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${it.title}`).then(r => r.json()).then(d => {
+                if (d[0]) {
+                  const n = [...itin]; n[it.idx].lat = d[0].lat; n[it.idx].lng = d[0].lon; sync('itinerary', n); show('위치 성공!');
+                }
+              });
+            } }, h(I, { n: 'explore', s: 13 })),
+            h('button', { className: 'icon-btn', onClick: () => sync('itinerary', itin.filter((_, j) => j !== it.idx).map((x,i)=>({...x, idx:i}))) }, h(I, { n: 'close', s: 13 }))
+          ])
+        ]),
+        h(EI, { val: it.desc, onSave: v => { const n = [...itin]; n[it.idx].desc = v; sync('itinerary', n) }, placeholder: '메모 입력...', style: { fontSize: 13, color: 'var(--sub)', width: '100%' } })
       ])
-    ]),
-    si < arr.length - 1 && h('button', { 
-      className: 'transport-badge',
-      onClick: () => {
-        const modes = ['walk', 'car', 'bus'];
-        const next = modes[(modes.indexOf(it.transport || 'walk') + 1) % modes.length];
-        const n = [...itin]; n[it.idx].transport = next; sync('itinerary', n);
-      }
-    }, [
-      h(I, { n: it.transport === 'car' ? 'directions_car' : it.transport === 'bus' ? 'directions_bus' : 'directions_walk', s: 12 }),
-      h('span', null, it.transport === 'car' ? '차량' : it.transport === 'bus' ? '대중교통' : '도보')
     ])
   ]);
 
-  const optimizeDay = (d) => {
-    const stops = itin.filter(x => (x.day || 1) === d && x.lat && x.lng);
-    if (stops.length < 2) return show('최적화할 장소가 부족합니다', false);
-    
-    show('AI 동선 최적화 중...');
-    const result = [];
-    let pool = [...stops];
-    let cur = pool.shift();
-    result.push(cur);
-    
-    while (pool.length > 0) {
-      pool.sort((a, b) => {
-        const d1 = Math.sqrt(Math.pow(cur.lat - a.lat, 2) + Math.pow(cur.lng - a.lng, 2));
-        const d2 = Math.sqrt(Math.pow(cur.lat - b.lat, 2) + Math.pow(cur.lng - b.lng, 2));
-        return d1 - d2;
-      });
-      cur = pool.shift();
-      result.push(cur);
-    }
-    
-    // Merge back to full itinerary
-    const otherDays = itin.filter(x => (x.day || 1) !== d || !x.lat || !x.lng);
-    const newItin = [...otherDays, ...result].sort((a, b) => (a.day || 1) - (b.day || 1));
-    sync('itinerary', newItin);
-    show('동선 최적화 완료!');
+  const days = Array.from({ length: Math.max(1, ...itin.map(x => x.day)) }, (_, i) => i + 1);
+  const getD = (d) => {
+    if (!trip.startDate) return '';
+    const date = new Date(trip.startDate);
+    date.setDate(date.getDate() + (d - 1));
+    return date.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' });
   };
 
-  const renderDay = (d) => {
-    const stops = itin.map((x, i) => ({ ...x, idx: i })).filter(x => (x.day || 1) === d);
-    return h('div', { key: d }, [
+  return h('div', { style: { padding: '0 20px 100px' } }, [
+    days.map(d => h('div', { key: d, className: 'day-section' }, [
       h('div', { className: 'day-header' }, [
-        h('span', { className: 'day-badge' }, 'Day ' + d),
-        h('span', { className: 'day-date', style: { flex: 1 } }, stops.length + '개 경유지'),
-        h('button', { className: 'opt-btn', onClick: () => optimizeDay(d) }, [h(I, { n: 'auto_fix_high', s: 12 }), 'AI 최적화']),
         h('button', { className: 'icon-btn', style: { width: 28, height: 28, marginLeft: 8 }, onClick: () => { if (confirm('Day ' + d + ' 삭제?')) sync('itinerary', itin.filter(x => (x.day || 1) !== d)) } }, h(I, { n: 'close', s: 14 }))
       ]),
       ...stops.map((it, si) => renderStop(it, si, stops))
@@ -498,6 +479,59 @@ const TPhoto = ({ trip, sid, show, sync, setSubTab }) => {
   ]);
 };
 
+const TFlight = ({ trip, sync }) => {
+  const f = trip.flight || { bus: '', busTime: '', flightNo: '', gate: '', seat: '', depTime: '' };
+  const update = (k, v) => sync('flight', { ...f, [k]: v });
+  
+  return h('div', { style: { padding: '20px' } }, [
+    h('div', { className: 'ios-card', style: { padding: '16px', marginBottom: 16 } }, [
+      h('h3', { style: { fontSize: 16, fontWeight: 800, marginBottom: 12 } }, '🚌 공항 이동 (Bus/Taxi)'),
+      h('div', { style: { display: 'flex', gap: 10, marginBottom: 10 } }, [
+        h('input', { className: 'ios-input', placeholder: '버스 번호/노선', value: f.bus, onChange: e => update('bus', e.target.value), style: { flex: 1 } }),
+        h('input', { className: 'ios-input', type: 'time', value: f.busTime, onChange: e => update('busTime', e.target.value), style: { width: 120 } })
+      ])
+    ]),
+    h('div', { className: 'ios-card', style: { padding: '16px' } }, [
+      h('h3', { style: { fontSize: 16, fontWeight: 800, marginBottom: 12 } }, '🛫 항공편 정보 (Flight)'),
+      h('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 } }, [
+        h('div', null, [h('label', { style: { fontSize: 11, color: 'var(--sub)' } }, '편명'), h('input', { className: 'ios-input', placeholder: '예: KE781', value: f.flightNo, onChange: e => update('flightNo', e.target.value) })]),
+        h('div', null, [h('label', { style: { fontSize: 11, color: 'var(--sub)' } }, '출발 시간'), h('input', { className: 'ios-input', type: 'time', value: f.depTime, onChange: e => update('depTime', e.target.value) })]),
+        h('div', null, [h('label', { style: { fontSize: 11, color: 'var(--sub)' } }, '게이트'), h('input', { className: 'ios-input', placeholder: 'Gate', value: f.gate, onChange: e => update('gate', e.target.value) })]),
+        h('div', null, [h('label', { style: { fontSize: 11, color: 'var(--sub)' } }, '좌석'), h('input', { className: 'ios-input', placeholder: 'Seat', value: f.seat, onChange: e => update('seat', e.target.value) })])
+      ])
+    ])
+  ]);
+};
+
+const TSummary = ({ trip, setSubTab }) => {
+  const hours = Array.from({ length: 16 }, (_, i) => `${String(i + 7).padStart(2, '0')}:00`);
+  const days = Array.from({ length: trip.itinerary?.reduce((m, x) => Math.max(m, x.day), 1) || 1 }, (_, i) => i + 1);
+  
+  return h('div', { style: { overflowX: 'auto', padding: '10px', height: 'calc(100vh - 350px)' } }, [
+    h('table', { className: 'summary-table' }, [
+      h('thead', null, h('tr', null, [
+        h('th', null, '시간'),
+        ...days.map(d => h('th', { key: d }, `${d}일차`))
+      ])),
+      h('tbody', null, hours.map(h_str => h('tr', { key: h_str }, [
+        h('td', null, h_str),
+        ...days.map(d => {
+          const it = trip.itinerary?.find(x => x.day === d && x.time.startsWith(h_str.split(':')[0]));
+          return h('td', { 
+            key: d, 
+            style: { background: it ? (it.cat === '식당' ? 'rgba(255,149,0,.08)' : 'rgba(0,122,255,.05)') : 'none', cursor: it ? 'pointer' : 'default' },
+            onClick: () => { if(it) { setSubTab('route'); setTimeout(() => { document.getElementById(`stop-${it.idx}`)?.scrollIntoView({ behavior: 'smooth' }) }, 100) } }
+          }, [
+            it && h('div', { style: { fontWeight: 700, color: it.cat === '식당' ? 'var(--orange)' : 'var(--blue)' } }, [
+              h('span', { style: { fontSize: 12 } }, it.emoji || '📍'), ' ', it.title
+            ])
+          ]);
+        })
+      ])))
+    ])
+  ]);
+};
+
 const M = ({ mod, toast, user, prof, trip, settle, open, close, show, form, setForm, setView, isOwn }) => {
   const m = [];
   if (toast) m.push(h('div', { key: 't', className: 'toast ' + (toast.ok ? 'toast-ok' : 'toast-err') }, [h(I, { n: toast.ok ? 'check_circle' : 'error', s: 18 }), toast.m]));
@@ -559,38 +593,82 @@ const M = ({ mod, toast, user, prof, trip, settle, open, close, show, form, setF
   return h(React.Fragment, null, m);
 };
 
-const TripsView = ({ trips, user, open, setSid, setView, setSubTab }) => h('div', null, [
-  h('div', { className: 'home-pad' }, [
-    h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 } }, [
-      h('div', null, [h('h1', { className: 'home-title' }, '내 여행'), h('p', { className: 'home-sub' }, trips.length + '개의 여행')]),
-      h('button', { className: 'btn btn-gray btn-pill btn-sm', onClick: () => open('join') }, [h(I, { n: 'link', s: 14 }), '초대 참여'])
-    ]),
-    h('div', { style: { display: 'flex', flexDirection: 'column', gap: 14 } }, [
-      ...trips.map((t, ti) => h('div', {
-        key: t.id,
-        className: 'trip-card',
-        onClick: () => { setSid(t.id); setView('detail'); setSubTab('route') }
-      }, [
-        h('div', { className: 'trip-cover', style: { background: covers[ti % covers.length] } }, [
-          t.owner === user?.uid && h('span', { className: 'pill pill-solid trip-cover-badge' }, '방장'),
-          h('span', { className: 'trip-cover-emoji' }, t.emoji)
+const TripsView = ({ trips, user, open, setSid, setView, setSubTab, show }) => {
+  const [aiVal, setAiVal] = useState('');
+  return h('div', null, [
+    h('div', { className: 'home-pad' }, [
+      h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 } }, [
+        h('div', null, [
+          h('h1', { className: 'home-title' }, '내 여행'),
+          h('p', { 
+            id: 'ai-console-trigger',
+            className: 'home-sub', 
+            style: { cursor: 'pointer', color: 'var(--blue)', fontWeight: 800, textDecoration: 'underline', marginTop: 4 },
+            onClick: () => { const el = document.getElementById('ai-console'); el.style.display = el.style.display === 'none' ? 'block' : 'none'; } 
+          }, [h(I, { n: 'bolt', s: 14 }), ` AI 데이터 주입 콘솔 열기`])
         ]),
-        h('div', { className: 'trip-body' }, [
-          h('h3', null, t.name),
-          h('div', { className: 'trip-dest' }, '📍 ' + (t.destination || '미정')),
-          h('div', { className: 'trip-stats' }, [
-            h('span', { className: 'pill pill-blue' }, '📋' + (t.itinerary?.length || 0)),
-            h('span', { className: 'pill pill-orange' }, '💰' + ((t.expenses?.reduce((a, c) => a + Number(c.amount), 0) || 0).toLocaleString())),
-            h('span', { className: 'pill pill-green' }, '✅' + (t.checklist?.filter(x => x.done).length || 0) + '/' + (t.checklist?.length || 0)),
-            h('span', { className: 'pill pill-purple' }, '📷' + (t.photos?.length || 0))
-          ])
+        h('div', { style: { display: 'flex', gap: 8 } }, [
+          h('button', { className: 'btn btn-gray btn-pill btn-sm', onClick: () => open('join') }, [h(I, { n: 'link', s: 14 }), '합류']),
+          h('button', { className: 'btn btn-blue btn-pill btn-sm', onClick: () => open('add') }, [h(I, { n: 'add', s: 14 }), '추가'])
         ])
-      ])),
-      trips.length === 0 && h('div', { className: 'empty' }, [h('div', { className: 'empty-icon' }, '🗺️'), h('h4', null, '여행을 시작해보세요')]),
-      h('button', { className: 'btn btn-blue btn-full btn-pill', style: { marginTop: 8 }, onClick: () => open('add') }, [h(I, { n: 'add', s: 16 }), '새 여행 만들기'])
+      ]),
+      
+      h('textarea', {
+        id: 'ai-console',
+        className: 'ios-input',
+        style: { display: 'none', height: 100, fontSize: 10, marginBottom: 16, fontFamily: 'monospace' },
+        placeholder: 'AI Sync JSON paste here...',
+        value: aiVal,
+        onChange: e => {
+          setAiVal(e.target.value);
+          try {
+            const { sid, data } = JSON.parse(e.target.value);
+            if (sid && data) {
+              window.AI_SYNC(sid, data);
+              show('AI 데이터 동기화 성공!');
+            }
+          } catch(err) {}
+        }
+      }),
+
+      h('div', { style: { display: 'flex', flexDirection: 'column', gap: 14 } }, [
+        ...trips.map((t, ti) => h('div', {
+          key: t.id,
+          className: 'trip-card',
+          onClick: () => { setSid(t.id); setView('detail'); setSubTab('route') }
+        }, [
+          h('div', { className: 'trip-cover', style: { background: covers[ti % covers.length] } }, [
+            t.owner === user?.uid && h('span', { className: 'pill pill-solid trip-cover-badge' }, '방장'),
+            h('span', { className: 'trip-cover-emoji' }, t.emoji)
+          ]),
+          h('div', { className: 'trip-body', style: { position: 'relative' } }, [
+            h('h3', null, t.name),
+            h('div', { className: 'trip-dest' }, '📍 ' + (t.destination || '미정')),
+            h('div', { className: 'trip-stats' }, [
+              h('span', { className: 'pill pill-blue' }, '📋' + (t.itinerary?.length || 0)),
+              h('span', { className: 'pill pill-orange' }, '💰' + ((t.expenses?.reduce((a, c) => a + Number(c.amount), 0) || 0).toLocaleString())),
+              h('span', { className: 'pill pill-purple' }, '📷' + (t.photos?.length || 0))
+            ]),
+            h('button', { 
+              className: 'icon-btn', 
+              style: { position: 'absolute', top: 0, right: 0, background: 'rgba(255,59,48,0.1)', color: 'var(--red)' },
+              onClick: (e) => {
+                e.stopPropagation();
+                if(confirm(`'${t.name}' 여행을 삭제할까요?`)) db.collection('trips').doc(t.id).delete().then(() => show('삭제 완료'));
+              }
+            }, h(I, { n: 'delete', s: 18 }))
+          ])
+        ])),
+        trips.length === 0 && h('div', { className: 'ios-card', style: { padding: 40, textAlign: 'center', background: 'rgba(120,120,128,.04)' } }, [
+          h('div', { style: { fontSize: 48, marginBottom: 12 } }, '✈️'),
+          h('h4', null, '여행을 시작해보세요'),
+          h('p', { className: 'home-sub' }, '새로운 일정을 추가하거나 초대 코드로 참여하세요.')
+        ]),
+        h('button', { className: 'btn btn-blue btn-full btn-pill', style: { marginTop: 8 }, onClick: () => open('add') }, [h(I, { n: 'add', s: 16 }), '새 여행 만들기'])
+      ])
     ])
-  ])
-]);
+  ]);
+};
 
 const DDayView = ({ trips, setSid, setView }) => {
   const upcoming = trips.filter(t => t.startDate && new Date(t.startDate) > new Date()).sort((a, b) => new Date(a.startDate) - new Date(b.startDate));
@@ -632,28 +710,51 @@ const StatsView = ({ trips }) => {
   const pc = trips.reduce((a, t) => a + (t.photos?.length || 0), 0);
   const dc = new Set(trips.map(t => t.destination).filter(Boolean)).size;
   
-  // Trip Report Data
   const topExp = trips.reduce((a, t) => {
     t.expenses?.forEach(x => { a[x.category] = (a[x.category] || 0) + Number(x.amount) });
     return a;
   }, {});
-  const bestCat = Object.entries(topExp).sort((a,b) => b[1]-a[1])[0] || ['없음', 0];
+  const sortedExp = Object.entries(topExp).sort((a,b) => b[1]-a[1]);
+  const bestCat = sortedExp[0] || ['없음', 0];
 
-  return h('div', null, [
+  let cumulative = 0;
+  const pieStyle = sortedExp.map(([cat, amt]) => {
+    const pct = (amt / (ec || 1)) * 100;
+    const color = cc[cat] || 'var(--sub)';
+    const res = `${color} ${cumulative}% ${cumulative + pct}%`;
+    cumulative += pct;
+    return res;
+  }).join(', ');
+
+  return h('div', { className: 'fade-in' }, [
     h('div', { style: { padding: '52px 20px 8px' } }, [
-      h('p', { style: { fontSize: 12, fontWeight: 700, color: 'var(--blue)', textTransform: 'uppercase', letterSpacing: .5 } }, 'TRAVEL REPORT'),
-      h('h1', { className: 'home-title' }, '여행 결산 리포트'),
-      h('p', { className: 'home-sub' }, '당신의 소중한 발자취를 확인하세요')
+      h('p', { style: { fontSize: 12, fontWeight: 800, color: 'var(--blue)', textTransform: 'uppercase' } }, 'TRAVEL INSIGHTS'),
+      h('h1', { className: 'home-title' }, '나의 여행 리포트'),
+      h('p', { className: 'home-sub' }, '전체 여행 데이터를 한눈에 확인하세요')
     ]),
-    h('div', { className: 'stat-grid', style: { marginTop: 16 } }, [
+    
+    h('div', { className: 'ios-card', style: { margin: '20px', padding: 24, textAlign: 'center' } }, [
+      h('div', { style: { 
+        width: 160, height: 160, borderRadius: '50%', margin: '0 auto 20px',
+        background: `conic-gradient(${pieStyle || 'var(--sep) 0 100%'})`,
+        boxShadow: 'inset 0 0 0 25px #fff, var(--shadow)'
+      } }),
+      h('div', { style: { display: 'flex', flexWrap: 'wrap', gap: 12, justifyContent: 'center' } }, sortedExp.map(([cat, amt]) => h('div', { key: cat, style: { display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700 } }, [
+        h('div', { style: { width: 10, height: 10, borderRadius: 3, background: cc[cat] || 'var(--sub)' } }),
+        h('span', null, `${cat} (${((amt/ec)*100).toFixed(0)}%)`)
+      ])))
+    ]),
+
+    h('div', { className: 'stat-grid' }, [
       h('div', { className: 'stat-box' }, [h('div', { className: 'stat-box-icon' }, '💰'), h('div', { className: 'stat-box-val' }, ec.toLocaleString() + '원'), h('div', { className: 'stat-box-label' }, '총 지출')]),
       h('div', { className: 'stat-box' }, [h('div', { className: 'stat-box-icon' }, '🏆'), h('div', { className: 'stat-box-val' }, bestCat[0]), h('div', { className: 'stat-box-label' }, '최다 지출 카테고리')]),
       h('div', { className: 'stat-box' }, [h('div', { className: 'stat-box-icon' }, '📷'), h('div', { className: 'stat-box-val' }, pc + '장'), h('div', { className: 'stat-box-label' }, '남긴 추억')]),
       h('div', { className: 'stat-box' }, [h('div', { className: 'stat-box-icon' }, '🌍'), h('div', { className: 'stat-box-val' }, dc + '개'), h('div', { className: 'stat-box-label' }, '방문 도시')])
     ]),
-    h('div', { className: 'ios-card', style: { margin: '20px', padding: 20, background: 'linear-gradient(135deg, var(--blue), var(--teal))', color: '#fff' } }, [
-      h('h4', { style: { fontSize: 18, fontWeight: 900, marginBottom: 6 } }, '✨ AI 여행 인사이트'),
-      h('p', { style: { fontSize: 13, opacity: .9, lineHeight: 1.6 } }, `${tc}번의 여행 동안 총 ${ec.toLocaleString()}원을 지출하셨네요. 특히 ${bestCat[0]} 항목에 가장 많은 투자를 하셨습니다. 다음 여행은 조금 더 여유로운 예산 계획을 세워보는 건 어떨까요?`)
+    
+    h('div', { className: 'ios-card glass', style: { margin: '20px', padding: 20 } }, [
+      h('h4', { style: { fontSize: 17, fontWeight: 900, marginBottom: 8 } }, '✨ AI 맞춤 가이드'),
+      h('p', { style: { fontSize: 14, opacity: .8, lineHeight: 1.6 } }, `${tc}번의 여행 중 ${bestCat[0]}에 가장 진심이셨네요! 다음 여행에서는 새로운 테마로 기록을 채워보시는 건 어떨까요?`)
     ])
   ]);
 };
@@ -770,7 +871,7 @@ function App() {
     h('div', { className: 'app' }, [
       h('div', { className: 'detail-hero', style: { background: covers[trips.indexOf(trip) % covers.length] } }, [
         h('div', { className: 'detail-hero-actions' }, [
-          h('button', { className: 'detail-hero-btn', onClick: () => { setView('home'); setSid(null) } }, [h(I, { n: 'arrow_back_ios_new', s: 12 }), '목록']),
+          h('button', { className: 'detail-hero-btn', onClick: () => { setView('home'); setSid(null) } }, [h(I, { n: 'home', s: 16 }), '홈']),
           h('div', { style: { display: 'flex', gap: 6 } }, [
             h('button', { className: 'detail-hero-btn icon-only', title: '초대 링크', onClick: () => {
               const url = window.location.href.split('?')[0].split('#')[0] + '?join=' + trip.id;
@@ -794,6 +895,7 @@ function App() {
               const link = document.createElement('a'); link.href = url; link.download = `${safeName}.ics`; link.click();
               show('캘린더 파일 생성됨!');
             } }, h(I, { n: 'event', s: 16 })),
+            h('button', { className: 'detail-hero-btn icon-only', title: 'PDF 가이드북', onClick: () => window.print() }, h(I, { n: 'picture_as_pdf', s: 16 })),
             h('button', { className: 'detail-hero-btn icon-only', title: '이미지로 저장', onClick: () => {
               show('이미지 생성 중...');
               html2canvas(document.querySelector('.app'), { useCORS: true, backgroundColor: '#f2f2f7' }).then(canvas => {
@@ -819,7 +921,7 @@ function App() {
       ]),
       h(InfoBar, { dest: trip?.destination }),
       h('div', { className: 'sub-tabs' }, [
-        { id: 'route', l: '🗓️ 일정' }, { id: 'map', l: '🗺️ 지도' }, { id: 'check', l: '✅ 체크' }, { id: 'memo', l: '📝 메모' }, { id: 'money', l: '💰 가계부' }, { id: 'photo', l: '📷 사진' }
+        { id: 'route', l: '🗓️ 일정' }, { id: 'summary', l: '📊 요약' }, { id: 'map', l: '🗺️ 지도' }, { id: 'flight', l: '🛫 출발' }, { id: 'check', l: '✅ 체크' }, { id: 'memo', l: '📝 메모' }, { id: 'money', l: '💰 가계부' }, { id: 'photo', l: '📷 사진' }
       ].map((t, idx) => h('button', {
         key: t.id,
         id: `tab-${t.id}`,
@@ -832,7 +934,7 @@ function App() {
       h('div', { 
         className: 'tab-indicator', 
         style: (() => {
-          const tabs = ['route', 'map', 'check', 'memo', 'money', 'photo'];
+          const tabs = ['route', 'summary', 'map', 'flight', 'check', 'memo', 'money', 'photo'];
           const idx = tabs.indexOf(subTab);
           const el = document.getElementById(`tab-${subTab}`);
           if (!el) return { left: 0, width: 0 };
@@ -842,14 +944,16 @@ function App() {
       h('div', { className: 'tab-view-window' }, [
         h('div', { 
           className: 'tab-content-container',
-          style: { transform: `translateX(-${['route', 'map', 'check', 'memo', 'money', 'photo'].indexOf(subTab) * 16.666}%)` }
+          style: { transform: `translateX(-${['route', 'summary', 'map', 'flight', 'check', 'memo', 'money', 'photo'].indexOf(subTab) * 12.5}%)` }
         }, [
-          h('div', { className: 'tab-content-pane' }, h(TRoute, commonProps)),
-          h('div', { className: 'tab-content-pane' }, h(MapView, commonProps)),
-          h('div', { className: 'tab-content-pane' }, h(TCheck, commonProps)),
-          h('div', { className: 'tab-content-pane' }, h(TMemo, commonProps)),
-          h('div', { className: 'tab-content-pane' }, h(TMoney, { ...commonProps, total, settle })),
-          h('div', { className: 'tab-content-pane' }, h(TPhoto, { ...commonProps }))
+          h('div', { id: 'pane-route', className: 'tab-content-pane' }, h(TRoute, commonProps)),
+          h('div', { id: 'pane-summary', className: 'tab-content-pane' }, h(TSummary, commonProps)),
+          h('div', { id: 'pane-map', className: 'tab-content-pane' }, h(MapView, commonProps)),
+          h('div', { id: 'pane-flight', className: 'tab-content-pane' }, h(TFlight, commonProps)),
+          h('div', { id: 'pane-check', className: 'tab-content-pane' }, h(TCheck, commonProps)),
+          h('div', { id: 'pane-memo', className: 'tab-content-pane' }, h(TMemo, commonProps)),
+          h('div', { id: 'pane-money', className: 'tab-content-pane' }, h(TMoney, { ...commonProps, total, settle })),
+          h('div', { id: 'pane-photo', className: 'tab-content-pane' }, h(TPhoto, { ...commonProps }))
         ])
       ])
     ]),
