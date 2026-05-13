@@ -258,10 +258,43 @@ const TripsView = ({ trips, user, open, setSid, setView, setSubTab, show }) => {
       ])
     ]),
     h('textarea', {
-      id: 'ai-console', className: 'ios-input', style: { display: 'none', height: 100, marginBottom: 16 },
-      placeholder: 'AI Sync JSON paste here...', value: aiVal, onChange: e => {
+      id: 'ai-console', className: 'ios-input', style: { display: 'none', height: 120, marginBottom: 16, fontSize: 11, fontFamily: 'monospace' },
+      placeholder: 'AI 데이터를 여기에 붙여넣으세요...', value: aiVal, onChange: e => {
         setAiVal(e.target.value);
-        try { const { sid, data } = JSON.parse(e.target.value); if(sid && data) { window.AI_SYNC(sid, data); show('성공!') } } catch(err) {}
+        try {
+          const raw = JSON.parse(e.target.value);
+          let sid = raw.sid;
+          let data = raw.data || raw;
+
+          // 만약 itinerary만 있는 배열이거나 객체라면 적절히 변환
+          if (Array.isArray(data)) data = { itinerary: data };
+          if (data.itinerary && !data.name) data.name = 'AI 생성 여행';
+
+          if (sid) {
+            window.AI_SYNC(sid, data);
+            show('기존 여행 업데이트 성공!');
+          } else if (data.itinerary) {
+            // SID가 없으면 새 여행 생성
+            const code = Math.random().toString(36).substring(2, 8).toUpperCase();
+            db.collection('trips').doc(code).set({
+              name: data.name || 'AI 추천 여행',
+              startDate: data.startDate || new Date().toISOString().split('T')[0],
+              owner: user.uid,
+              members: [user.uid],
+              memberNames: { [user.uid]: prof.nickname },
+              itinerary: data.itinerary || [],
+              expenses: data.expenses || [],
+              checklist: data.checklist || [],
+              memo: data.memo || '',
+              createdAt: Date.now()
+            }).then(() => {
+              show('새 여행 생성 및 주입 완료!');
+              setTimeout(() => location.reload(), 1000);
+            });
+          }
+        } catch(err) {
+          // JSON 형식이 아닐 때 에러 무시
+        }
       }
     }),
     h('div', { style: { display: 'flex', flexDirection: 'column', gap: 14 } }, [
