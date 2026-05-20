@@ -24,6 +24,7 @@ const getDDay = (d) => {
 };
 
 window.AI_SYNC = (sid, data, user, prof) => {
+  console.log('AI Syncing:', sid);
   if (!sid || !data) return;
   const docRef = db.collection('trips').doc(sid);
   const updateData = { ...data };
@@ -165,10 +166,11 @@ const TCheck = ({ trip, sync }) => {
 const TripsView = ({ trips, user, open, setSid, setView, setSubTab, show, prof }) => {
   const [aiVal, setAiVal] = useState('');
   const del = (e, t) => {
-    e.stopPropagation();
     e.preventDefault();
+    e.stopPropagation();
+    console.log('Delete Clicked:', t.id);
     if (confirm(`[${t.name}] 여행을 정말 삭제하시겠습니까?`)) {
-      db.collection('trips').doc(t.id).delete().then(() => show('삭제되었습니다.'));
+      db.collection('trips').doc(t.id).delete().then(() => show('삭제되었습니다.')).catch(err => console.error(err));
     }
   };
   return h('div', { className: 'home-pad' }, [
@@ -186,7 +188,7 @@ const TripsView = ({ trips, user, open, setSid, setView, setSubTab, show, prof }
         h('h3', null, t.name),
         h('div', { className: 'trip-dest', style: { display: 'flex', justifyContent: 'space-between' } }, [h('span', null, '📍 ' + (t.destination || '미정')), h('span', { style: { color: 'var(--blue)', fontWeight: 800 } }, getDDay(t.startDate))])
       ]),
-      h('button', { className: 'icon-btn', style: { position: 'absolute', top: 10, right: 10, background: 'rgba(255,255,255,0.8)', borderRadius: '50%', padding: 10, zIndex: 100, boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }, onClick: (e) => del(e, t) }, h(I, { n: 'delete', s: 20, style: { color: 'var(--red)' } }))
+      h('button', { className: 'icon-btn del-trigger', style: { position: 'absolute', top: 12, right: 12, background: 'rgba(255,255,255,0.9)', borderRadius: '12px', padding: '8px', zIndex: 100, boxShadow: '0 2px 10px rgba(0,0,0,0.1)', display: 'flex' }, onClick: (e) => del(e, t) }, h(I, { n: 'delete', s: 22, style: { color: 'var(--red)' } }))
     ])))
   ]);
 };
@@ -202,14 +204,14 @@ const StatsView = ({ trips }) => {
     h('h1', { className: 'home-title' }, '통계 리포트'),
     h('div', { className: 'ios-card', style: { padding: 24, textAlign: 'center', marginTop: 20, background: 'var(--blue)', color: '#fff' } }, [h('p', null, '누적 총 지출'), h('h2', { style: { fontSize: 32, fontWeight: 900 } }, totalExp.toLocaleString() + '원')]),
     h('h3', { style: { marginTop: 24, marginBottom: 12, fontWeight: 800 } }, '🏨 여행별 지출 비중'),
-    h('div', { style: { display: 'flex', flexDirection: 'column', gap: 10 } }, trips.map(t => {
+    h('div', { style: { display: 'flex', flexDirection: 'column', gap: 12 } }, trips.map(t => {
       const exp = t.expenses?.reduce((s, x) => s + Number(x.amount), 0) || 0;
       const pct = totalExp ? Math.round((exp/totalExp)*100) : 0;
       return h('div', { key: t.id }, [
-        h('div', { className: 'ios-card stats-item', style: { padding: 16, display: 'flex', justifyContent: 'space-between', cursor: 'pointer', border: selId === t.id ? '2px solid var(--blue)' : 'none', transition: 'all 0.2s' }, onClick: () => setSelId(selId === t.id ? null : t.id) }, [h('span', { style: { fontWeight: 700 } }, t.name), h('span', { style: { fontWeight: 800, color: 'var(--blue)' } }, `${exp.toLocaleString()}원 (${pct}%)`)]),
-        selId === t.id && h('div', { style: { padding: '10px 16px', background: 'rgba(0,0,0,0.03)', borderRadius: 12, marginTop: 4 } }, Object.entries(selCats).map(([k,v]) => {
+        h('button', { className: 'ios-card stats-btn', style: { width: '100%', padding: 16, display: 'flex', justifyContent: 'space-between', border: selId === t.id ? '2px solid var(--blue)' : 'none', background: '#fff', fontSize: 16 }, onClick: () => { console.log('Stats Clicked:', t.id); setSelId(selId === t.id ? null : t.id); } }, [h('span', { style: { fontWeight: 700 } }, t.name), h('span', { style: { fontWeight: 800, color: 'var(--blue)' } }, `${exp.toLocaleString()}원 (${pct}%)`)]),
+        selId === t.id && h('div', { style: { padding: '12px 16px', background: 'rgba(0,0,0,0.03)', borderRadius: 12, marginTop: 4 } }, Object.entries(selCats).map(([k,v]) => {
           const sPct = selExp ? Math.round((v/selExp)*100) : 0;
-          return h('div', { key: k, style: { display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '4px 0' } }, [h('span', null, k), h('span', { style: { fontWeight: 700 } }, `${v.toLocaleString()}원 (${sPct}%)`)]);
+          return h('div', { key: k, style: { display: 'flex', justifyContent: 'space-between', fontSize: 14, padding: '6px 0', borderBottom: '1px solid rgba(0,0,0,0.05)' } }, [h('span', null, k), h('span', { style: { fontWeight: 700 } }, `${v.toLocaleString()}원 (${sPct}%)`)]);
         }))
       ]);
     })),
@@ -289,7 +291,7 @@ function App() {
         h('h2', { className: 'modal-title' }, '지출 추가'),
         h('input', { className: 'ios-input', placeholder: '항목', id: 'ex-n' }),
         h('div', { style: { display: 'flex', gap: 10, marginTop: 10 } }, [h('input', { className: 'ios-input', type: 'number', placeholder: '금액', id: 'ex-a', style: { flex: 1 } }), h('select', { className: 'ios-input', id: 'ex-c', style: { width: 100 } }, Object.keys(ci).map(k => h('option', { key: k }, k)))]),
-        h('input', { className: 'ios-input', type: 'date', id: 'ex-d', defaultValue: new Date().toISOString().split('T')[0], style: { marginTop: 10 } }),
+        h('input', { className: 'ios-input', type: 'date', id: 'ex-d', defaultValue: new Date().toISOString().split('T')[0], style: { marginTop: 10, display: 'block', width: '100%' } }),
         h('button', { className: 'btn btn-blue btn-full btn-pill', style: { marginTop: 20 }, onClick: () => {
           const n = document.getElementById('ex-n').value, a = document.getElementById('ex-a').value, c = document.getElementById('ex-c').value, d = document.getElementById('ex-d').value;
           if(!n || !a) return show('내용과 금액을 입력하세요');
